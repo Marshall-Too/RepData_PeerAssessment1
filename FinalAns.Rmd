@@ -1,0 +1,216 @@
+---
+title: "Course Project 1 - Reproducible Research"
+author: "Marshall Too"
+date: "Jan 4, 2020"
+output: html_document
+---
+
+## Assignment Instructions {.tabset}
+
+Hi! I have summarized my answers into the different tabs from Ans 1 to Ans 6 in the tabs below. Thanks for taking the time to review my work. :]  
+  
+- *Describing Data* - Code for reading in the dataset and/or processing the data  
+- *Ans 1* - Histogram of the total number of steps taken each day  
+- *Ans 2* - Reported Mean and median number of steps taken each day  
+- *Ans 3* - Time series plot of the average number of steps taken  
+- *Ans 4* - Reported 5-minute interval that, on average, contains the maximum number of steps  
+- *Ans 5* - Approach to fix missing data, revised distribution with missing data and impact to mean and median  
+- *Ans 6* - Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends      
+
+### **Data Summary** 
+
+This is simply the code for reading in the dataset and/or processing the data  
+  
+Answers can be found from Step 2 onwards  
+
+
+```{r, echo = TRUE}
+setwd("~/R/RepData_PeerAssessment1/")
+activity<-read.csv("activity.csv")
+```
+
+Exploring the basics of this data
+```{r, message = FALSE}
+
+dim(activity)
+names(activity)
+head(activity)
+str(activity)
+#total number of missing data
+sum(is.na(activity$steps))/dim(activity)[[1]]
+#transforming the date column into date format using lubridate
+library(lubridate)
+activity$date<-ymd(activity$date)
+length(unique(activity$date))
+```
+
+
+### Ans 1
+The Histogram of the total number of steps taken each day is shown below
+
+```{r ggplot3, echo = TRUE, message = FALSE}
+
+
+Q2 <- data.frame(tapply(activity$steps,activity$date,sum,na.rm=TRUE))
+
+Q2$date <-as.Date(rownames(Q2),'%Y-%m-%d')
+library(ggplot2)
+rownames(Q2) <-NULL
+names(Q2)[[1]] <-"Total Steps"
+
+
+#Total Steps by date bar chart
+ggplot(Q2,aes(y=`Total Steps`,x=date))+geom_bar(stat="identity")  + 
+        theme_light() +
+        theme(plot.title = element_text(hjust = 0.5)) + 
+        ylab("Total Steps")+xlab("Date")+ggtitle("Total Steps by date") +
+       scale_x_date(date_breaks = "months" , date_labels = "%M-%Y") 
+
+
+```
+
+
+### Ans 2
+
+Mean and median number of steps taken each day
+
+```{r, echo = TRUE}
+
+library(dplyr)
+
+activity_total_steps <- with(activity, aggregate(steps, by = list(date), FUN = sum, na.rm = TRUE))
+names(activity_total_steps) <- c("date", "steps")
+
+```
+
+
+This is the average/mean of the total number of steps taken per day:
+```{r, echo = TRUE}
+mean(activity_total_steps$steps)
+```
+
+This is the median of the total number of steps taken per day:
+```{r, echo = TRUE}
+median(activity_total_steps$steps)
+```
+
+
+### Ans 3
+Average number of steps taken (averaged across all days) versus the 5-minute intervals plot is shown below
+
+```{r ggplot, echo = TRUE}
+Q4 <-  aggregate(activity$steps, by=list(activity$interval), FUN=mean, na.rm=TRUE) 
+names(Q4) <- c("Intervals","Steps")
+Q4$Intervals = as.numeric(as.character(Q4$Intervals))
+
+Q4plot <- ggplot(Q4,aes(x= Intervals,y=Steps)) +
+  geom_line(aes(group=1)) + geom_point() + #group needs to be indicated since intervals is a factor
+  scale_x_continuous(breaks = seq(0,2500, by = 500)) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  ylab("Mean Steps Every day") +
+  xlab("Intervals")+ggtitle("Mean Steps by 5 Min Intervals")
+
+Q4plot
+```
+
+
+### Ans 4  
+The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r, echo = TRUE}
+#This is assuming that the words on average means averaging steps by date and interval
+Q5 = Q4[which.max(Q4$Steps), 'Intervals']
+print(Q5)
+```
+
+'The 5-minute interval that, on average, contains the maximum number of steps is `r Q5`.'
+
+### Ans 5  
+
+In this datset, there are a number of days with missing values which may introduce bias. 
+
+```{r, echo = TRUE}
+Q6 <- activity
+Q6$Missing <-is.na(Q6$steps)
+sum(Q6$Missing)
+```
+
+'The total number of rows with NA (missing values) is `r sum(Q6$Missing)`.'
+  
+I decide to fill in the missing values based on the **average** steps value at **each interval**  
+  
+For example, we find at interval 5, the average steps taken each day is five  
+  
+Hence, if we identify a missing value at interval = 5 on any day, we will replace this missing value with five
+
+
+```{r, echo = TRUE, message = FALSE}
+library(dplyr)
+library(zoo)
+
+Q6 <- activity %>% group_by(interval) %>% mutate(steps = ifelse(is.na(steps), 
+                                            mean(steps, na.rm = TRUE), 
+                                            steps)) %>% ungroup()
+
+```
+  
+The revised histogram, after filling in missing values, is shown below.    
+  
+```{r ggplot4, echo = TRUE, message=FALSE}
+library(ggplot2)
+
+Q6$interval = as.numeric(as.character(Q6$interval))
+                         
+ggplot(Q6, aes(x=interval,y=steps)) +
+  geom_histogram(stat='identity') + 
+  ggtitle("Steps by 5 Min Intervals After Missing Values Replaced")
+```
+  
+The revised mean and median total number of steps taken per day are summarized below:
+
+```{r, echo = TRUE, message = FALSE}
+options(scipen=999)
+revisedQ2 =  data.frame(tapply(Q6$steps,Q6$date,sum,na.rm=TRUE))
+colnames(revisedQ2) = 'steps'
+
+med_old = median(activity_total_steps$steps)
+med_new = round(as.numeric(median(revisedQ2$steps)),0)
+mean_old = mean(activity_total_steps$steps)
+mean_new = round(as.numeric(mean(revisedQ2$steps)),0)
+```
+
+'After replacing missing values, the median has **increased** from `r med_old` to `r med_new`.'  
+  
+'After replacing missing values, the mean has **increased**  from `r mean_old` to `r mean_new`.'  
+  
+  
+This **increase** is expected given we are replacing missing values, initially zero, with an additional value.  
+
+### Ans 6
+Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r, echo = TRUE}
+library(timeDate)
+
+Q7 = Q6 %>% mutate(Weekday = if_else(isWeekday(date), 'Weekday', 'Weekend'))
+print.data.frame(Q7)
+```
+  
+Make a panel plot containing a time series plot (i.e. 𝚝𝚢𝚙𝚎 = “𝚕”) of the 5-minute interval (x-axis) and the   average number of steps taken, averaged across all weekday days or weekend days (y-axis).  
+  
+```{r, echo = TRUE}
+
+averageStepByDayTypeAndInterval<- Q7 %>%
+  group_by(Weekday, interval) %>%
+  summarize(averageStepByDay=sum(steps))
+
+library(lattice)
+with(averageStepByDayTypeAndInterval, 
+      xyplot(averageStepByDay ~ interval | Weekday, 
+      type = "l",      
+      main = "Total Number of Steps within Intervals by dayType",
+      xlab = "Daily Intervals",
+      ylab = "Average Number of Steps"))
+
+```
